@@ -13,5 +13,5 @@
 Презентация -  https://docs.google.com/presentation/d/16sm-9TvhkkbxAGHWV1qGtCoZeQV7leGttgq1-T4CsR4/edit?usp=sharing\
 
 
-Ссылка на видеоотчет на YouTube -  https://drive.google.com/file/d/1zszxhpMQPqqueV7ZtXk-8bOQTyAZVQ8B/view?usp=sharing\
+Ссылка на видеоотчет-  https://drive.google.com/file/d/1zszxhpMQPqqueV7ZtXk-8bOQTyAZVQ8B/view?usp=sharing\
 
