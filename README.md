@@ -9,6 +9,6 @@
 Программа для выхода на орбиту - загружена\
 
 Отчёт - загружен \
-Презентация - загружена
+Презентация - загружена \
 Ссылка на видеоотчет-  https://drive.google.com/file/d/1zszxhpMQPqqueV7ZtXk-8bOQTyAZVQ8B/view?usp=sharing\
 
