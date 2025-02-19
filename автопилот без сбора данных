@@ -1,0 +1,91 @@
+
+import numpy                 # Нужна для математических функций (sqrt, exp, и т.д.)
+import time                  # Нужна для задержек (sleep) и измерения времени
+import krpc                  # Главная библиотека для связи с KSP через kRPC
+import matplotlib.pyplot as plt  # Библиотека для построения графиков (matplotlib)
+import math
+#графики
+time_data = []
+altitude_data = []
+speed_data = []
+mass_data = []
+time.sleep(1)
+print("5")
+time.sleep(1)
+print("4")
+time.sleep(1)
+print("3")
+time.sleep(1)
+print("2")
+time.sleep(1)
+print("1")
+time.sleep(1)
+# Подключение к KSP
+conn = krpc.connect(name='4 Engine Rocket')
+vessel = conn.space_center.active_vessel
+vessel.control.sas = True
+# Установка тяги (например, 70% для первых 10 км)
+vessel.control.throttle = 0.7
+kon1stup = 10000 #конец 1 ступени
+kon2stup = 50000 #еонец 2 ступени
+# Активация двигателей
+vessel.control.activate_next_stage()
+# Включение SAS для стабилизации
+# Ожидание перед запуском
+print("Запуск через 3 секунды...")
+time.sleep(3)
+# произведен запуск
+
+
+
+
+# Подъем на высоту 10 км
+print("Подъем на высоту 10 км...")
+while vessel.flight().mean_altitude < kon1stup:
+    time.sleep(1)
+    vessel.control.sas_mode = vessel.control.sas_mode.stability_assist
+    speed = vessel.flight(vessel.orbit.body.reference_frame).speed # скорость
+    print(f"Высота: {vessel.flight().mean_altitude:.2f} м, Скорость: {speed:.2f} м/с") # скорость и масса
+# Увеличение тяги до 100%
+vessel.control.throttle = 1.0
+vessel.control.activate_next_stage() #выброс 1 ступени
+time.sleep(1)
+vessel.control.activate_next_stage() # запуск двигателя 2 ступени
+# Гравитационный поворот
+print("Начинаем гравитационный поворот...")
+# Начинаем гравитационный поворот
+target_pitch = 30  # Угол поворота в градусах 39
+vessel.control.sas = False # Отключаем SAS
+
+# Устанавливаем начальную ориентацию
+vessel.auto_pilot.engage()
+vessel.auto_pilot.target_pitch = target_pitch
+vessel.auto_pilot.target_heading = vessel.flight().heading
+# Даем кораблю время на поворот
+time.sleep(4)  # Задержка для завершения поворота
+vessel.auto_pilot.disengage()
+vessel.control.sas = True
+vessel.control.sas_mode = vessel.control.sas_mode.stability_assist
+print("Гравитационный поворот завершен.")
+
+# Ожидание достижения орбиты
+while vessel.flight().mean_altitude < kon2stup:
+    time.sleep(1)
+# выход на орбиту после 2 ступени
+vessel.control.activate_next_stage() # активируем ступень
+vessel.control.activate_next_stage() # активируем ступень
+target_pitch = -10  # Угол поворота в градусах
+vessel.auto_pilot.engage()
+vessel.auto_pilot.target_pitch = target_pitch
+vessel.auto_pilot.target_heading = vessel.flight().heading
+vessel.auto_pilot.wait()
+# Даем кораблю время на поворот
+time.sleep(3)  # Задержка для завершения поворота
+vessel.auto_pilot.disengage()
+vessel.control.sas = True
+vessel.control.sas_mode = vessel.control.sas_mode.stability_assist
+time.sleep(40)
+vessel.control.activate_next_stage() # активируем ступень
+time.sleep(10)
+vessel.control.activate_next_stage() # активируем ступень
+print("Достигнута орбита, двигатели отключены.")
