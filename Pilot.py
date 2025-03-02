@@ -49,7 +49,7 @@ def record_data():
         height.append(altitude())
         velocity.append(speed())
         mass_data.append(mass())
-
+        altitude_data.append(altitude)
         # Вычисляем ускорение
         if len(pastime) > 1:
             time_diff = pastime[-1] - pastime[-2]
@@ -111,6 +111,7 @@ while True:
                 srbs_separated = True
                 print('SRBs separated')
                 vessel.control.activate_next_stage()
+                print(mass_data[-1])
 
         if apoapsis() > 180000*0.9: # вывод на периапсис
             vessel.control.throttle = 0.1
