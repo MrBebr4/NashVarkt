@@ -1,256 +1,162 @@
-import numpy                 # Нужна для математических функций (sqrt, exp, и т.д.)
-import time                  # Нужна для задержек (sleep) и измерения времени
-import krpc                  # Главная библиотека для связи с KSP через kRPC
-import matplotlib.pyplot as plt  # Библиотека для построения графиков (matplotlib)
+import numpy
+import time
+import krpc
+import matplotlib.pyplot as plt
 import math
+import json
 
-###############################################################################
-#                          НАСТРОЙКИ ГРАВИТАЦИОННОГО ПОВОРОТА                 #
-###############################################################################
+# Настройки гравитационного поворота
+turn_start_altitude = 250
+turn_end_altitude = 100000
+target_altitude = 180000
 
-# Высота, на которой начинается гравитационный поворот (тангаж начинает меняться)
-turn_start_altitude = 250      # метров над поверхностью
-# Высота, на которой гравитационный поворот заканчивается (тангаж выйдет на горизонталь)
-turn_end_altitude = 100000      # метров
-# Желаемая конечная орбитальная высота (в данном случае для апоapsиса)
-target_altitude = 180000        # метров перицентр
-
-###############################################################################
-#                          УСТАНОВКА СОЕДИНЕНИЯ С ИГРОЙ                       #
-###############################################################################
-# Устанавливаем соединение с KSP через kRPC
-# name='Запуск на орбиту' — это просто имя сессии (можно выбрать любое)
+# Установка соединения с игрой
 conn = krpc.connect(name='Запуск на орбиту')
-# Получаем доступ к текущему активному кораблю (ракете), которая выбрана в KSP
 vessel = conn.space_center.active_vessel
 
-###############################################################################
-#                          СОЗДАНИЕ ПОТОКОВ (STREAMS) ДЛЯ ДАННЫХ             #
-###############################################################################
-# В KSP можно "подписаться" на некоторые параметры (как на живую телеметрию),
-# чтобы не вызывать функции напрямую каждый раз, а получать данные быстрее.
-
-# Поток UT (Universal Time) — игровое время во вселенной KSP
+# Создание потоков для данных
 ut = conn.add_stream(getattr, conn.space_center, 'ut')
-# Поток высоты над средним уровнем (mean_altitude) — усредненная высота над поверхностью планеты
 altitude = conn.add_stream(getattr, vessel.flight(), 'mean_altitude')
-# Поток значения апоапсиса орбиты (apoapsis_altitude) — максимально возможной высоты
 apoapsis = conn.add_stream(getattr, vessel.orbit, 'apoapsis_altitude')
-# Поток скорости (speed) — скорость корабля относительно выбранного опорного кадра
-# (здесь выбран reference_frame тела, вокруг которого летим)
 speed = conn.add_stream(getattr, vessel.flight(vessel.orbit.body.reference_frame), 'speed')
-# Поток массы корабля (mass) — меняется при сжигании топлива, отделении ступеней и т.д.
 mass = conn.add_stream(getattr, vessel, 'mass')
-# Получаем объект ресурсов 5-й ступени (stage=5), чтобы следить, сколько там топлива (SolidFuel).
-# cumulative=False говорит о том, что мы хотим данные только по этой ступени, а не всей ракете.
 stage_5_resources = vessel.resources_in_decouple_stage(stage=5-1, cumulative=False)
-# Создаём поток для количества твердого топлива (SolidFuel) в 5-й ступени (обычно это ускорители SRB).
 srb_fuel = conn.add_stream(stage_5_resources.amount, 'SolidFuel')
 
-###############################################################################
-#                          СПИСКИ ДЛЯ СОХРАНЕНИЯ ДАННЫХ (ТЕЛЕМЕТРИЯ)         #
-###############################################################################
-time_data = []      # сюда будем записывать время (UT) на каждом шаге
-altitude_data = []  # сюда будем записывать высоту
-speed_data = []     # сюда будем записывать скорость
-mass_data = []      # сюда будем записывать массу
+# Списки для сохранения данных
+time_data = []
+altitude_data = []
+speed_data = []
+mass_data = []
+pastime = []
+height = []
+velocity = []
+acceleration = []
 
-###############################################################################
-#                          НАСТРОЙКИ ДЛЯ ЗАПИСИ ДАННЫХ ПО ВРЕМЕНИ             #
-###############################################################################
-last_record_time = 0   # здесь храним последнее время, когда мы записали данные
-record_interval = 0.5  # интервал в секундах, через который делаем запись данных
+# Настройки для записи данных
+last_record_time = 0
+record_interval = 0.1  # Шаг записи 0.1 секунды
 
-###############################################################################
-#                          ФУНКЦИЯ ДЛЯ ЗАПИСИ ДАННЫХ                          #
-###############################################################################
+# Записываем начальное время
+start_time = ut()
+
+# Функция для записи данных
 def record_data():
-    """
-    Функция, которая проверяет, прошло ли нужное количество времени
-    (record_interval) с момента последней записи. Если да — записывает
-    время, высоту, скорость и массу в соответствующие списки.
-    """
-    global last_record_time         # нужно для изменения переменной, объявленной снаружи
-    current_time = ut()            # текущее игровое время
-    # Проверяем, прошло ли достаточно времени с момента последней записи
+    global last_record_time, start_time
+    current_time = ut() - start_time  # Корректируем время
     if current_time - last_record_time >= record_interval:
-        time_data.append(current_time)     # записываем текущее время
-        altitude_data.append(altitude())   # записываем текущую высоту
-        speed_data.append(speed())         # записываем текущую скорость
-        mass_data.append(mass())           # записываем текущую массу
-        last_record_time = current_time    # обновляем время последней записи
+        pastime.append(current_time)
+        height.append(altitude())
+        velocity.append(speed())
+        mass_data.append(mass())
 
-###############################################################################
-#                          ПРЕДСТАРТОВАЯ ПОДГОТОВКА                           #
-###############################################################################
+        # Вычисляем ускорение
+        if len(pastime) > 1:
+            time_diff = pastime[-1] - pastime[-2]
+            if time_diff > 0:
+                accel = (velocity[-1] - velocity[-2]) / time_diff
+                acceleration.append(accel)
+            else:
+                acceleration.append(0)
+        else:
+            acceleration.append(0)
 
-# Отключаем SAS (автоматическую систему стабилизации KSP), чтобы автопилот мог взять управление
+        last_record_time = current_time
+
+# Функция для сохранения данных в JSON
+def save_to_json(filename='flight_data.json'):
+    data = {
+        "pastime": pastime,
+        "height": height,
+        "velocity": velocity,
+        "acceleration": acceleration,
+        "mass": mass_data  # Масса
+    }
+    with open(filename, 'w') as f:
+        json.dump(data, f, indent=4)
+
+# Предстартовая подготовка
 vessel.control.sas = False
-
-# Устанавливаем рычаг управления тягой (throttle) на максимум — 100%
 vessel.control.throttle = 1.0
 
-###############################################################################
-#                          ОБРАТНЫЙ ОТСЧЁТ И СТАРТ                            #
-###############################################################################
-
+# Обратный отсчёт и старт
 print('3...')
-time.sleep(1)  # ждём 1 секунду
+time.sleep(1)
 print('2...')
-time.sleep(1)  # ещё 1 секунду
+time.sleep(1)
 print('1...')
-time.sleep(1)  # ещё 1 секунду
+time.sleep(1)
 print('Launch!')
-
-# Активируем первую ступень (например, может быть включение основных двигателей)
 vessel.control.activate_next_stage()
-# Включаем автопилот, чтобы он мог управлять углами тангажа и курса
 vessel.auto_pilot.engage()
-# Задаём автопилоту начальные настройки: тангаж 90°, курс 90°
-# (в KSP 90° курс означает "восток", а тангаж 90° означает вертикальный взлёт)
 vessel.auto_pilot.target_pitch_and_heading(90, 90)
 
-###############################################################################
-#                          ОСНОВНОЙ ЦИКЛ ПОЛЁТА ВВЕРХ                          #
-###############################################################################
-
-# Флаг, указывающий, что ускорители (SRB) были отделены
+# Основной цикл полёта вверх
 srbs_separated = False
-# Текущий угол "гравитационного поворота"
 turn_angle = 0
-
-# Бесконечный цикл, который будет выполняться, пока мы не достигнем нужных условий
 while True:
-    # Сохраняем текущие телеметрические данные, если пришло время
     record_data()
+    while True:
+        record_data()
+        if altitude() > turn_start_altitude and altitude() < turn_end_altitude:
+            frac = ((altitude() - turn_start_altitude) / (turn_end_altitude - turn_start_altitude))
+            new_turn_angle = frac * 90
+            if abs(new_turn_angle - turn_angle) > 0.5:
+                turn_angle = new_turn_angle
+                vessel.auto_pilot.target_pitch_and_heading(90 - turn_angle, 90)
 
-    ############################################################################
-    #                          ГРАВИТАЦИОННЫЙ ПОВОРОТ                          #
-    ############################################################################
-    # Проверяем, не пора ли начинать поворот (мы выше turn_start_altitude)
-    # и ещё не поздно ли (мы ниже turn_end_altitude)
-    if altitude() > turn_start_altitude and altitude() < turn_end_altitude:
-        # Считаем, какая доля пути уже пройдена между началом и концом поворота
-        frac = ((altitude() - turn_start_altitude) /
-                (turn_end_altitude - turn_start_altitude))
-        # Угол поворота будет от 0 до 90 градусов
-        new_turn_angle = frac * 90
+        if srbs_separated == False:
+            if srb_fuel() < 0.1:
+                vessel.control.activate_next_stage()
+                srbs_separated = True
+                print('SRBs separated')
+                vessel.control.activate_next_stage()
 
-        # Меняем угол поворота, только если изменение достаточно велико (больше 0.5 градуса)
-        if abs(new_turn_angle - turn_angle) > 0.5:
-            turn_angle = new_turn_angle
-            # Угол тангажа мы выставляем как (90 - turn_angle), чтобы он постепенно снижался к горизонту
-            vessel.auto_pilot.target_pitch_and_heading(90 - turn_angle, 90)
+        if apoapsis() > 180000*0.9: # вывод на периапсис
+            vessel.control.throttle = 0.1
+            break
 
-    ############################################################################
-    #                          ОТДЕЛЕНИЕ УСКОРИТЕЛЕЙ (SRB) начало 2 ступени    #
-    ############################################################################
-    # Если мы ещё не отделяли SRB, проверяем остаток твёрдого топлива (srb_fuel)
-    if not srbs_separated:
-        if srb_fuel() < 0.1:
-            # Если топлива почти не осталось, отделяем ступень (вызов activate_next_stage)
-            vessel.control.activate_next_stage()
-            srbs_separated = True
-            print('SRBs separated')
-            vessel.control.activate_next_stage()
+    vessel.control.throttle = 0.1
+    while apoapsis() < target_altitude:
+        record_data()
+        pass
 
-    ############################################################################
-    #                          УПРАВЛЕНИЕ ТЯГОЙ ПРИ ДОСТИЖЕНИИ АПОАПСИСА       #
-    ############################################################################
-    # Проверяем, когда апоапсис приближается к 90% от целевой высоты
-    # Если апоапсис (apoapsis()) > 0.9 * target_altitude, мы отключаем тягу (throttle = 0)
-    if apoapsis() > target_altitude * 0.9:
-        vessel.control.throttle = 0.0
-        # Прерываем цикл while True, чтобы перейти к следующему этапу
-        break
+    print('Coasting out of atmosphere')
+    while altitude() < target_altitude:
+        record_data()
+        pass
 
-###############################################################################
-#                          ВЫВОД НА НУЖНЫЙ АПОАПСИС                           #
-###############################################################################
-
-vessel.control.throttle = 0.1
-
-# Ждём, пока фактический апоапсис не станет равным (или больше) target_altitude
-while apoapsis() < target_altitude:
-    record_data()
-    pass  # ничего дополнительно не делаем, просто крутим цикл
-
-###############################################################################
-#                          ПОЛЁТ ПО ИНЕРЦИИ ДО ВЫХОДА ИЗ АТМОСФЕРЫ            #
-###############################################################################
-
-print('Coasting out of atmosphere')
-# Ждём, пока ракета не выйдет из атмосферы (пусть 70.5 км считается вне атмосферы — запас бред)
-while altitude() < target_altitude:
-    record_data()
-    pass
-
-###############################################################################
-#                          ПЛАНИРОВАНИЕ МАНЁВРА ОРБИТЫ                        #
-###############################################################################
-current_altitude = altitude()
-current_apogee = vessel.orbit.apoapsis
-current_apoapsis = apoapsis()
-if current_altitude > target_altitude and current_apoapsis < 900000:
-    vessel.auto_pilot.engage()
-    vessel.auto_pilot.target_pitch_and_heading(-15, 90)
-
-while current_altitude > target_altitude and current_apoapsis < 900000:  # высота ниже 100000 и апоапсис меньше 900 км
-    vessel.control.throttle = 0.3
+    current_altitude = altitude()
+    current_apogee = vessel.orbit.apoapsis
     current_apoapsis = apoapsis()
+    if (current_altitude > target_altitude and current_apoapsis < 900000):
+        vessel.auto_pilot.engage()
+        vessel.auto_pilot.target_pitch_and_heading(-15, 90)
+
+    while (current_altitude > target_altitude and current_apoapsis < 900000):
+        vessel.control.throttle = 0.3
+        current_apoapsis = apoapsis()
+
+    vessel.control.throttle = 0.0
+
+    time.sleep(5)
     record_data()
-
-vessel.control.throttle = 0.0
-
-###############################################################################
-#                          ВЫПУСК СПУТНИКА (ЕСЛИ ЕСТЬ) И УДАЛЕНИЕ УЗЛА        #
-###############################################################################
-time.sleep(5)
-
-vessel.control.activate_next_stage()
-time.sleep(5)
-vessel.control.activate_next_stage()
-time.sleep(5)
-vessel.control.activate_next_stage()
-
+    vessel.control.activate_next_stage()
+    time.sleep(5)
+    record_data()
+    vessel.control.activate_next_stage()
+    time.sleep(5)
+    record_data()
+    vessel.control.activate_next_stage()
+    time.sleep(5)
+    record_data()
+    break
 print('Elliptical orbit achieved')
-
-###############################################################################
-#                          ПОСТРОЕНИЕ ГРАФИКОВ ПО ИТОГАМ ПОЛЁТА              #
-###############################################################################
-
-# Создаём фигуру 12 x 8 дюймов
-plt.figure(figsize=(12, 8))
-
-###############################################################################
-#                          ГРАФИК 1: ВЫСОТА                                   #
-###############################################################################
-plt.subplot(3, 1, 1)            # разделяем окно на 3 строки и 1 столбец, выбираем 1-й график
-plt.plot(time_data, altitude_data, label='Altitude (m)', color='blue')  # строим линию высоты
-plt.xlabel('Time (s)')          # подпись оси X
-plt.ylabel('Altitude (m)')      # подпись оси Y
-plt.legend()                    # включаем легенду (чтобы было понятно, что за линия)
-
-###############################################################################
-#                          ГРАФИК 2: СКОРОСТЬ                                 #
-###############################################################################
-plt.subplot(3, 1, 2)            # выбираем 2-й график
-plt.plot(time_data, speed_data, label='Speed (m/s)', color='green')   # скорость
-plt.xlabel('Time (s)')
-plt.ylabel('Speed (m/s)')
-plt.legend()
-
-###############################################################################
-#                          ГРАФИК 3: МАССА                                    #
-###############################################################################
-plt.subplot(3, 1, 3)            # выбираем 3-й график
-plt.plot(time_data, mass_data, label='Mass (kg)', color='red')        # масса
-plt.xlabel('Time (s)')
-plt.ylabel('Mass (kg)')
-plt.legend()
-
-# Делаем так, чтобы графики аккуратно уместились и не налезали друг на друга
-plt.tight_layout()
-
-# Показываем окно с графиками
-plt.show()
+save_to_json()
+with open('flight_data.json', 'r') as f:
+    data = json.load(f)
+print("Время (pastime):", data["pastime"])
+print("Высота (height):", data["height"])
+print("Скорость (velocity):", data["velocity"])
+print("Ускорение (acceleration):", data["acceleration"])
+print("Масса (mass):", data["mass"])
