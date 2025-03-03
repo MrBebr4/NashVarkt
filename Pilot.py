@@ -4,10 +4,10 @@ import krpc
 import matplotlib.pyplot as plt
 import math
 import json
-
+from scipy.integrate import odeint
 # Настройки гравитационного поворота
 turn_start_altitude = 82
-target_altitude = 60000
+
 
 # Установка соединения с игрой
 conn = krpc.connect(name='Запуск на орбиту')
@@ -70,7 +70,7 @@ def save_to_json(filename='flight_data.json'):
         json.dump(data, f, indent=4)
 # Предстартовая подготовка
 vessel.control.sas = False
-vessel.control.throttle = 0.5
+vessel.control.throttle = 0.7
 # Обратный отсчёт и старт
 print('3...')
 time.sleep(1)
@@ -83,6 +83,7 @@ vessel.control.activate_next_stage()
 vessel.auto_pilot.engage()
 vessel.auto_pilot.target_pitch_and_heading(90, 90)
 # Основной цикл полёта вверх
+
 srbs_separated = False
 turn_angle = 0
 while True:
@@ -101,18 +102,13 @@ while True:
                 srbs_separated = True
                 print('SRBs separated')
                 vessel.control.activate_next_stage()
-                print(mass_data[-1])
-                print(altitude())
-                print(pastime)
-                print(acceleration)
-                vessel.control.throttle = 0.5
+               
         if altitude() > 70000: # вывод на периапсис
-            vessel.control.throttle = 0.0
             break
     print('Coasting out of atmosphere')
     current_altitude = altitude()
+    record_data()
     while (current_altitude > 70000 and current_altitude < 85000):
-        print(current_altitude)
         current_altitude = altitude()
         record_data()
     current_apogee = vessel.orbit.apoapsis
@@ -120,12 +116,12 @@ while True:
     vessel.auto_pilot.engage()
     vessel.auto_pilot.target_pitch_and_heading(0, 90)
     while (current_altitude >= 84999):
+        print(pastime)
         record_data()
-        vessel.control.throttle = 0.5
         current_apoapsis = apoapsis()
         if (current_apoapsis > 300000):
             break
-    vessel.control.throttle = 0.0
+
     time.sleep(3)
     record_data()
     vessel.control.activate_next_stage()
