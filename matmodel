@@ -5,7 +5,7 @@ from scipy.integrate import odeint
 
 # Параметры
 c = 0.85  # Коэффициент сопротивления
-rho = 0.5  # Плотность
+rho = 0.4  # Плотность
 g = 9.81  # Ускорение свободного падения
 M = 0.028  # Масса
 R = 8.31  # Универсальная газовая постоянная
@@ -22,8 +22,8 @@ x4_0 = 0  # Начальное значение x4
 x5_0 = 36000  # Начальное значение x5
 x6_0 = 90  # Начальное значение x6
 
-stages = [{'F_t': 700000, 'mass': 10500, 'time': 60},  # Первая ступень
-          {'F_t': 330000, 'mass': 8000, 'time': 132}]  # Вторая ступень
+stages = [{'F_t': 700000, 'mass': 10500, 'time': 40},  # Первая ступень
+          {'F_t': 330000, 'mass': 8000, 'time': 135}]  # Вторая ступень
 
 # Функция для системы дифференциальных уравнений
 def f(data, t, stage):
@@ -75,28 +75,53 @@ y_speeds = np.concatenate([odeint_first[:, 3], odeint_second[:, 3]])
 mass = np.concatenate([odeint_first[:, 4], odeint_second[:, 4]])
 
 # Расчет ускорения
-acceleration = np.gradient(np.sqrt(x_speeds**2 + y_speeds**2), time)
+acceleration = []
+acceleration.append(0)
+for i in range(1, len(x_speeds)):
+    acceleration.append(((x_speeds[i] - x_speeds[i - 1]) ** 2 + (y_speeds[i] - y_speeds[i - 1]) ** 2)**0.5)
 
 # Построение графиков
-plt.figure(figsize=(12, 12))
+plt.figure(figsize=(12, 16))  # Увеличим размер по вертикали для 4 графиков
 
 # График скорости
 plt.subplot(4, 1, 1)
 plt.plot(time, np.sqrt(x_speeds**2 + y_speeds**2)/4, label="Скорость (модель)")
 with open("flight_data.json", 'r', encoding="UTF-8") as file:
     data = json.load(file)
-
-plt.plot(data["pastime"][1:], data["velocity"][1:], color="red", label="Скорость (KSP)")
+plt.plot(data["pastime"][1:324], data["velocity"][1:324], color="red", label="Скорость (KSP)")
 plt.ylabel("Скорость, м/с")
 plt.xlabel("Время, с")
+plt.xlim(0, 200)  # Ограничение по оси X
 plt.legend()
 
 # График высоты
 plt.subplot(4, 1, 2)
 plt.plot(time, y, label="Высота (модель)")
-plt.plot(data["pastime"][1:], data["height"][1:], color="red", label="Высота (KSP)")
+plt.plot(data["pastime"][1:324], data["height"][1:324], color="red", label="Высота (KSP)")
 plt.ylabel("Высота, м")
 plt.xlabel("Время, с")
+plt.xlim(0, 200)  # Ограничение по оси X
+plt.legend()
+
+# График ускорения
+plt.subplot(4, 1, 3)
+plt.plot(time, acceleration, label="Ускорение (модель)")
+# Если в данных KSP есть информация об ускорении, можно добавить:
+plt.plot(data["acceleration"][1:324], color="red", label="Ускорение (KSP)")
+plt.ylabel("Ускорение, м/с²")
+plt.xlabel("Время, с")
+plt.xlim(0, 200)  # Ограничение по оси X
+plt.legend()
+
+# График массы
+plt.subplot(4, 1, 4)
+plt.plot(time, mass, label="Масса (модель)")
+# Если в данных KSP есть информация о массе, можно добавить:
+if "mass" in data:
+     plt.plot(data["pastime"][1:324], data["mass"][1:324], color="red", label="Масса (KSP)")
+plt.ylabel("Масса, кг")
+plt.xlabel("Время, с")
+plt.xlim(0, 200)  # Ограничение по оси X
 plt.legend()
 
 plt.tight_layout()
