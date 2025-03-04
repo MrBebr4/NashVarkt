@@ -22,9 +22,6 @@ mass = conn.add_stream(getattr, vessel, 'mass')
 stage_5_resources = vessel.resources_in_decouple_stage(stage=5-1, cumulative=False)
 srb_fuel = conn.add_stream(stage_5_resources.amount, 'SolidFuel')
 # Списки для сохранения данных
-time_data = []
-altitude_data = []
-speed_data = []
 mass_data = []
 pastime = []
 height = []
@@ -44,7 +41,6 @@ def record_data():
         height.append(altitude())
         velocity.append(speed())
         mass_data.append(mass())
-        altitude_data.append(altitude)
         # Вычисляем ускорение
         if len(pastime) > 1:
             time_diff = pastime[-1] - pastime[-2]
@@ -102,7 +98,11 @@ while True:
                 srbs_separated = True
                 print('SRBs separated')
                 vessel.control.activate_next_stage()
-               
+                print(mass_data[-1])
+                print(altitude())
+                print(pastime)
+                print(acceleration)
+
         if altitude() > 70000: # вывод на периапсис
             break
     print('Coasting out of atmosphere')
