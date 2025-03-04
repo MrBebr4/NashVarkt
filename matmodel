@@ -91,18 +91,16 @@ with open("flight_data.json", 'r', encoding="UTF-8") as file:
 plt.plot(data["pastime"][1:324], data["velocity"][1:324], color="red", label="Скорость (KSP)")
 plt.ylabel("Скорость, м/с")
 plt.xlabel("Время, с")
-plt.xlim(0, 200)  # Ограничение по оси X
+plt.xlim()  # Ограничение по оси X
 plt.legend()
-
 # График высоты
 plt.subplot(4, 1, 2)
 plt.plot(time, y, label="Высота (модель)")
 plt.plot(data["pastime"][1:324], data["height"][1:324], color="red", label="Высота (KSP)")
 plt.ylabel("Высота, м")
 plt.xlabel("Время, с")
-plt.xlim(0, 200)  # Ограничение по оси X
+plt.xlim()  # Ограничение по оси X
 plt.legend()
-
 # График ускорения
 plt.subplot(4, 1, 3)
 plt.plot(time, acceleration, label="Ускорение (модель)")
@@ -110,9 +108,8 @@ plt.plot(time, acceleration, label="Ускорение (модель)")
 plt.plot(data["acceleration"][1:324], color="red", label="Ускорение (KSP)")
 plt.ylabel("Ускорение, м/с²")
 plt.xlabel("Время, с")
-plt.xlim(0, 200)  # Ограничение по оси X
+plt.xlim()  # Ограничение по оси X
 plt.legend()
-
 # График массы
 plt.subplot(4, 1, 4)
 plt.plot(time, mass, label="Масса (модель)")
@@ -121,8 +118,7 @@ if "mass" in data:
      plt.plot(data["pastime"][1:324], data["mass"][1:324], color="red", label="Масса (KSP)")
 plt.ylabel("Масса, кг")
 plt.xlabel("Время, с")
-plt.xlim(0, 200)  # Ограничение по оси X
+plt.xlim()  # Ограничение по оси X
 plt.legend()
-
 plt.tight_layout()
 plt.show()
